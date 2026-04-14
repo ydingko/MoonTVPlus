@@ -11537,12 +11537,14 @@ const MusicConfigComponent = ({
   const [enabled, setEnabled] = useState(false);
   const [baseUrl, setBaseUrl] = useState('');
   const [token, setToken] = useState('');
+  const [proxyEnabled, setProxyEnabled] = useState(true);
 
   useEffect(() => {
     if (config?.MusicConfig) {
       setEnabled(config.MusicConfig.Enabled || false);
       setBaseUrl(config.MusicConfig.BaseUrl || '');
       setToken(config.MusicConfig.Token || '');
+      setProxyEnabled(config.MusicConfig.ProxyEnabled ?? true);
     }
   }, [config]);
 
@@ -11562,6 +11564,7 @@ const MusicConfigComponent = ({
             Enabled: enabled,
             BaseUrl: normalizedBaseUrl,
             Token: token.trim(),
+            ProxyEnabled: proxyEnabled,
           }),
         });
 
@@ -11628,6 +11631,26 @@ const MusicConfigComponent = ({
       </div>
 
       <div className='space-y-4'>
+        <div className='flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700'>
+          <div>
+            <h3 className='text-sm font-medium text-gray-900 dark:text-gray-100'>
+              启用播放代理
+            </h3>
+            <p className='text-xs text-gray-500 dark:text-gray-400 mt-1'>
+              开启后走服务器代理并设置浏览器永久缓存，关闭后将每次都解析播放链接
+            </p>
+          </div>
+          <label className='relative inline-flex items-center cursor-pointer'>
+            <input
+              type='checkbox'
+              checked={proxyEnabled}
+              onChange={(e) => setProxyEnabled(e.target.checked)}
+              className='sr-only peer'
+            />
+            <div className="w-14 h-7 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-green-300 dark:peer-focus:ring-green-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:start-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all dark:border-gray-600 peer-checked:bg-green-600"></div>
+          </label>
+        </div>
+
         <div>
           <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
             lxserver Base URL

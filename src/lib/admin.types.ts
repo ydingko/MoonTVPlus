@@ -264,6 +264,7 @@ export interface AdminConfig {
     Enabled?: boolean; // 启用音乐功能
     BaseUrl?: string; // lxserver 地址
     Token?: string; // lxserver x-user-token
+    ProxyEnabled?: boolean; // 是否走 stream 代理
     // 兼容旧代码的遗留字段（待删除）
     TuneHubEnabled?: boolean;
     TuneHubBaseUrl?: string;

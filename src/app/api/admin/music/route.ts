@@ -32,17 +32,20 @@ export async function POST(request: NextRequest) {
       Enabled,
       BaseUrl,
       Token,
+      ProxyEnabled,
     } = body as {
       Enabled?: boolean;
       BaseUrl?: string;
       Token?: string;
+      ProxyEnabled?: boolean;
     };
 
     // 参数校验
     if (
       (Enabled !== undefined && typeof Enabled !== 'boolean') ||
       (BaseUrl !== undefined && typeof BaseUrl !== 'string') ||
-      (Token !== undefined && typeof Token !== 'string')
+      (Token !== undefined && typeof Token !== 'string') ||
+      (ProxyEnabled !== undefined && typeof ProxyEnabled !== 'boolean')
     ) {
       return NextResponse.json({ error: '参数格式错误' }, { status: 400 });
     }
@@ -62,6 +65,7 @@ export async function POST(request: NextRequest) {
       Enabled,
       BaseUrl,
       Token,
+      ProxyEnabled: ProxyEnabled ?? true,
     };
 
     // 写入数据库

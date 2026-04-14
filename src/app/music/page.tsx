@@ -88,6 +88,10 @@ export default function MusicPage() {
   const [showPlayer, setShowPlayer] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showLyrics, setShowLyrics] = useState(false);
+  const [musicProxyEnabled, setMusicProxyEnabled] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    return (window as any).RUNTIME_CONFIG?.MUSIC_PROXY_ENABLED !== false;
+  });
   const [lyrics, setLyrics] = useState<LyricLine[]>([]);
   const [currentLyricIndex, setCurrentLyricIndex] = useState(-1);
   const [currentSongUrl, setCurrentSongUrl] = useState('');
@@ -190,6 +194,40 @@ export default function MusicPage() {
     return `/api/music/v2/stream?${params.toString()}`;
   };
 
+  const getMusicProxyEnabled = () => {
+    if (typeof window === 'undefined') return true;
+    return (window as any).RUNTIME_CONFIG?.MUSIC_PROXY_ENABLED !== false;
+  };
+
+  const fetchPlayData = async (
+    song: Song,
+    source: MusicSource,
+    songQuality: '128k' | '320k' | 'flac' | 'flac24bit',
+    includeUrl = false
+  ) => {
+    const response = await fetch('/api/music/v2/play', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        includeUrl,
+        song: {
+          songId: song.id,
+          source,
+          songmid: song.songmid,
+          name: song.name,
+          artist: song.artist,
+          album: song.album,
+          cover: song.pic,
+          durationSec: song.duration,
+          durationText: song.durationText,
+        },
+        quality: songQuality,
+      }),
+    });
+
+    return response.json();
+  };
+
   const beginResolving = () => {
     setResolvingCount((prev) => prev + 1);
   };
@@ -251,6 +289,10 @@ export default function MusicPage() {
     // 此函数已不再使用，所有状态恢复都在 initializePlayState 中完成
   };
 
+  useEffect(() => {
+    setMusicProxyEnabled(getMusicProxyEnabled());
+  }, []);
+
   // 页面加载时恢复播放状态和数据库记录
   useEffect(() => {
     const initializePlayState = async () => {
@@ -300,6 +342,8 @@ export default function MusicPage() {
 
         // 4. 使用数据库的最新记录（歌曲和进度都从数据库获取）
         if (sortedRecords.length > 0) {
+          const proxyEnabled = getMusicProxyEnabled();
+          setMusicProxyEnabled(proxyEnabled);
           const latestDbRecord = sortedRecords[0];
           const latestDbSong = sortedSongs[0];
 
@@ -312,53 +356,49 @@ export default function MusicPage() {
           const dbPlayTime = latestDbRecord.playTime || 0;
           songStartTimeRef.current = Date.now();
 
-          // 5. 先直接使用稳定 stream 地址恢复播放
           const platform = latestDbSong.platform || 'kw';
-          const streamUrl = buildStreamUrl(latestDbSong, platform, playState.quality || '320k');
-          setCurrentSongUrl(streamUrl);
+          const selectedQuality = playState.quality || '320k';
 
-          if (audioRef.current) {
-            audioRef.current.src = streamUrl;
+          const restoreTime = () => {
+            if (audioRef.current && dbPlayTime > 0) {
+              audioRef.current.currentTime = dbPlayTime;
+            }
+          };
 
-            const restoreTime = () => {
-              if (audioRef.current && dbPlayTime > 0) {
-                audioRef.current.currentTime = dbPlayTime;
-              }
-            };
+          if (proxyEnabled) {
+            const streamUrl = buildStreamUrl(latestDbSong, platform, selectedQuality);
+            setCurrentSongUrl(streamUrl);
 
-            audioRef.current.addEventListener('loadedmetadata', restoreTime, { once: true });
-            audioRef.current.load();
-          }
+            if (audioRef.current) {
+              audioRef.current.src = streamUrl;
+              audioRef.current.addEventListener('loadedmetadata', restoreTime, { once: true });
+              audioRef.current.load();
+            }
 
-          fetch('/api/music/v2/play', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              includeUrl: false,
-              song: {
-                songId: latestDbSong.id,
-                source: platform,
-                songmid: latestDbSong.songmid,
-                name: latestDbSong.name,
-                artist: latestDbSong.artist,
-                album: latestDbSong.album,
-                cover: latestDbSong.pic,
-                durationSec: latestDbSong.duration,
-                durationText: latestDbSong.durationText,
-              },
-              quality: playState.quality || '320k',
-            }),
-          })
-            .then(res => res.json())
-            .then((data) => {
-              if (data.success && data.data?.lyric?.lyric) {
+            fetchPlayData(latestDbSong, platform, selectedQuality, false)
+              .then((data) => {
+                if (data.success && data.data?.lyric?.lyric) {
+                  const parsedLyrics = parseLyric(data.data.lyric.lyric, data.data.lyric.tlyric);
+                  setLyrics(parsedLyrics);
+                }
+              })
+              .catch((error) => {
+                console.error('加载歌词失败:', error);
+              });
+          } else {
+            const data = await fetchPlayData(latestDbSong, platform, selectedQuality, true);
+            if (data.success && data.data?.play?.directUrl && audioRef.current) {
+              setCurrentSongUrl(data.data.play.directUrl);
+              audioRef.current.src = data.data.play.directUrl;
+              audioRef.current.addEventListener('loadedmetadata', restoreTime, { once: true });
+              audioRef.current.load();
+
+              if (data.data.lyric?.lyric) {
                 const parsedLyrics = parseLyric(data.data.lyric.lyric, data.data.lyric.tlyric);
                 setLyrics(parsedLyrics);
               }
-            })
-            .catch((error) => {
-              console.error('加载歌词失败:', error);
-            });
+            }
+          }
         }
       } catch (error) {
         console.error('加载播放记录失败:', error);
@@ -767,7 +807,9 @@ export default function MusicPage() {
     beginResolving();
     try {
       // 使用歌曲自己的平台信息，如果没有则使用当前选择的平台
-      const platform = song.platform || currentSource;
+          const platform = song.platform || currentSource;
+          const proxyEnabled = getMusicProxyEnabled();
+          setMusicProxyEnabled(proxyEnabled);
 
       // 记录歌曲开始播放的时间
       songStartTimeRef.current = Date.now();
@@ -815,59 +857,71 @@ export default function MusicPage() {
         }
       });
 
-      const streamUrl = buildStreamUrl(song, platform, quality);
-      setCurrentSongUrl(streamUrl);
+      if (proxyEnabled) {
+        const streamUrl = buildStreamUrl(song, platform, quality);
+        setCurrentSongUrl(streamUrl);
 
-      if (audioRef.current) {
-        audioRef.current.src = streamUrl;
-        audioRef.current.load();
-        audioRef.current.play().catch(err => {
-          console.error('播放失败:', err);
-        });
-        setIsPlaying(true);
-      }
+        if (audioRef.current) {
+          audioRef.current.src = streamUrl;
+          audioRef.current.load();
+          audioRef.current.play().catch(err => {
+            console.error('播放失败:', err);
+          });
+          setIsPlaying(true);
+        }
 
-      fetch('/api/music/v2/play', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          includeUrl: false,
-          song: {
-            songId: song.id,
-            source: platform,
-            songmid: song.songmid,
-            name: song.name,
-            artist: song.artist,
-            album: song.album,
-            cover: song.pic,
-            durationSec: song.duration,
-            durationText: song.durationText,
-          },
-          quality,
-        }),
-      })
-        .then(res => res.json())
-        .then((data) => {
-          if (data.success) {
-            if (data.data.song?.cover) {
-              setCurrentSong({
-                ...song,
-                pic: data.data.song.cover,
-                platform,
-              });
+        fetchPlayData(song, platform, quality, false)
+          .then((data) => {
+            if (data.success) {
+              if (data.data.song?.cover) {
+                setCurrentSong({
+                  ...song,
+                  pic: data.data.song.cover,
+                  platform,
+                });
+              }
+
+              if (data.data.lyric?.lyric) {
+                const parsedLyrics = parseLyric(data.data.lyric.lyric, data.data.lyric.tlyric);
+                setLyrics(parsedLyrics);
+              }
+            } else {
+              console.error('播放信息获取失败:', data);
             }
-
-            if (data.data.lyric?.lyric) {
-              const parsedLyrics = parseLyric(data.data.lyric.lyric, data.data.lyric.tlyric);
-              setLyrics(parsedLyrics);
-            }
-          } else {
-            console.error('播放信息获取失败:', data);
+          })
+          .catch((error) => {
+            console.error('加载歌词失败:', error);
+          });
+      } else {
+        const data = await fetchPlayData(song, platform, quality, true);
+        if (data.success && data.data?.play?.directUrl) {
+          if (data.data.song?.cover) {
+            setCurrentSong({
+              ...song,
+              pic: data.data.song.cover,
+              platform,
+            });
           }
-        })
-        .catch((error) => {
-          console.error('加载歌词失败:', error);
-        });
+
+          if (data.data.lyric?.lyric) {
+            const parsedLyrics = parseLyric(data.data.lyric.lyric, data.data.lyric.tlyric);
+            setLyrics(parsedLyrics);
+          }
+
+          setCurrentSongUrl(data.data.play.directUrl);
+
+          if (audioRef.current) {
+            audioRef.current.src = data.data.play.directUrl;
+            audioRef.current.load();
+            audioRef.current.play().catch(err => {
+              console.error('播放失败:', err);
+            });
+            setIsPlaying(true);
+          }
+        } else {
+          console.error('播放信息获取失败:', data);
+        }
+      }
     } catch (error) {
       console.error('播放失败:', error);
     } finally {
