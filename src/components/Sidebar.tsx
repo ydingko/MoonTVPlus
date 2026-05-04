@@ -63,6 +63,10 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const watchRoomContext = useWatchRoomContextSafe();
+
+  if (pathname === '/watch-room/screen') {
+    return null;
+  }
   // 若同一次 SPA 会话中已经读取过折叠状态，则直接复用，避免闪烁
   const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
     if (
@@ -147,11 +151,6 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
       label: '电视直播',
       href: '/live',
     },
-    {
-      icon: Globe,
-      label: '网络直播',
-      href: '/web-live',
-    },
   ]);
 
   useEffect(() => {
@@ -179,11 +178,15 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
         label: '综艺',
         href: '/douban?type=show',
       },
-      {
-        icon: TvMinimalPlay,
-        label: '电视直播',
-        href: '/live',
-      },
+      ...(runtimeConfig?.LIVE_ENABLED
+        ? [
+            {
+              icon: TvMinimalPlay,
+              label: '电视直播',
+              href: '/live',
+            },
+          ]
+        : []),
     ];
 
     // 如果启用网络直播，添加网络直播入口
