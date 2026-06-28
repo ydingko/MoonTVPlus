@@ -84,11 +84,11 @@
 | 语言      | TypeScript 4                                                 |
 | 播放器    | [ArtPlayer](https://github.com/zhw2590582/ArtPlayer) · [HLS.js](https://github.com/video-dev/hls.js/) |
 | 代码质量  | ESLint · Prettier · Jest                                     |
-| 部署      | Docker                                                       |
+| 部署      | Docker · Vercel · Netlify · Cloudflare Workers · EdgeOne Pages |
 
 ## 部署
 
-本项目**支持 Docker、Vercel、Netlify 和 Cloudflare Workers 平台** 部署。
+本项目**支持 Docker、Vercel、Netlify、Cloudflare Workers 和 EdgeOne Pages 平台** 部署。
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/mtvpls/MoonTVPlus)
 
@@ -193,6 +193,52 @@ on:
 **7. 配置外部定时任务（可选）**
 
 可使用外部定时请求/api/cron/mtvpls端点以触发定时任务，或新建一个workers请求触发，推荐每小时请求一次。
+
+---
+
+### EdgeOne Pages 部署（通过 GitHub Actions）
+
+EdgeOne Pages/Makers 支持通过 API Token 在 GitHub Actions 中自动构建并部署，本项目已内置 `.github/workflows/edgeone-deploy.yml`。
+
+#### 前置要求
+
+1. 一个腾讯云 EdgeOne 账号
+2. Fork 本项目到你的 GitHub 账号
+3. 准备一个 Upstash Redis 实例（推荐）
+4. 准备 EdgeOne API Token
+
+#### 配置步骤
+
+**1. 获取 EdgeOne API Token**
+
+- 进入 EdgeOne Pages/Makers 控制台
+- 在账号或 API Token 相关页面创建用于 CI/CD 的 Token
+- 复制生成的 Token，后续填入 GitHub Secrets
+
+**2. 配置 GitHub Secrets**
+
+进入你 Fork 的仓库，点击 Settings > Secrets and variables > Actions > New repository secret，添加以下必需的 Secrets：
+
+| Secret 名称                | 说明                | 示例值                   |
+| -------------------------- | ------------------- | ------------------------ |
+| `EDGEONE_API_TOKEN`        | EdgeOne API Token   | `your_edgeone_token`     |
+| `USERNAME`                 | 站长账号            | `admin`                  |
+| `PASSWORD`                 | 站长密码            | `your_secure_password`   |
+| `NEXT_PUBLIC_STORAGE_TYPE` | 存储类型            | `upstash`                |
+| `UPSTASH_URL`              | Upstash Redis URL   | `https://xxx.upstash.io` |
+| `UPSTASH_TOKEN`            | Upstash Redis Token | `your_upstash_token`     |
+
+其他可选环境变量可按需继续添加到 GitHub Secrets，工作流会自动同步已配置且非空的变量到 EdgeOne 项目环境变量中。
+
+**3. 触发部署**
+
+- 进入仓库的 Actions 页面
+- 选择 "Deploy to EdgeOne" workflow
+- 点击 "Run workflow"
+- `project_name` 默认为 `moontvplus`
+- `area` 默认为 `overseas`，即全球可用区（不含中国大陆）；如需全球可用区可选择 `global`
+- `sync_environment` 默认开启，会在部署后同步环境变量并再次部署以确保新建项目也能读取环境变量
+
 
 ---
 
@@ -436,6 +482,7 @@ dockge/komodo 等 docker compose UI 也有自动更新功能
 | NEXT_PUBLIC_VOICE_CHAT_STRATEGY          | 观影室语音聊天策略                                           | webrtc-fallback/server-only | webrtc-fallback                                              |
 | NEXT_PUBLIC_ENABLE_OFFLINE_DOWNLOAD      | 是否启用服务器离线下载功能（开启后也仅管理员和站长可用）     | true/false                  | false                                                        |
 | OFFLINE_DOWNLOAD_DIR                     | 离线下载文件存储目录                                         | 任意有效路径                | /data                                                        |
+| OFFLINE_DOWNLOAD_PROXY                   | 离线下载代理                                                 | http://host:port         | (空)                                                         |
 | VIDEOINFO_CACHE_MINUTES                  | 私人影库视频信息在内存中的缓存时长（分钟）                   | 正整数                      | 1440（1天）                                                  |
 | NEXT_PUBLIC_ENABLE_SOURCE_SEARCH         | 是否开启源站寻片功能                                         | true/false                  | true                                                         |
 | MAX_PLAY_RECORDS_PER_USER                | 单个用户播放记录清理阈值（超过此数量将自动清理旧记录）       | 正整数                      | 100                                                          |
@@ -449,6 +496,8 @@ dockge/komodo 等 docker compose UI 也有自动更新功能
 | DANMAKU_API_TOKEN                        | 弹幕 API Token                                               | 任意字符串                  | 87654321                                                     |
 | DATA_MIGRATION_CHUNK_SIZE                | 数据迁移批处理大小（控制导入导出时每批处理的用户数量和数据条数） | 正整数                      | 10                                                           |
 | QR_LOGIN_STORE_MODE                      | 电视端扫码登录状态存储模式；serverless环境下多节点内存状态不可靠。 | auto、memory、hybrid、shared | auto                                                         |
+| WEB_PUSH_PROXY                           | Web Push 服务端发送代理地址，用于服务器访问 FCM 等 Push endpoint | HTTP/HTTPS 代理 URL          | (空)                                                         |
+| WEB_PUSH_BASEURL                         | Web Push endpoint 反向代理 Base URL；支持 `{endpoint}`（URL编码）和 `{raw_endpoint}`（不编码）占位符 | URL                         | (空)                                                         |
 
 NEXT_PUBLIC_DOUBAN_PROXY_TYPE 选项解释：
 
